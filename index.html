@@ -1,0 +1,962 @@
+<!DOCTYPE html>
+<html lang="cs">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Online Test - PS1</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        /* Zamezení označování textu pro pocit nativní aplikace */
+        body { -webkit-tap-highlight-color: transparent; user-select: none; }
+        
+        .option-btn {
+            touch-action: manipulation; /* Zlepšení reakce na dotyk */
+        }
+        
+        .correct { 
+            background-color: #10b981 !important; 
+            border-color: #059669 !important;
+            color: white !important; 
+        }
+        
+        .wrong { 
+            background-color: #ef4444 !important; 
+            border-color: #dc2626 !important;
+            color: white !important; 
+        }
+
+        /* Animace stisknutí */
+        .option-btn:active:not(:disabled) {
+            transform: scale(0.98);
+            background-color: #eff6ff;
+        }
+    </style>
+</head>
+<body class="bg-gray-50 sm:bg-gray-100 min-h-screen flex flex-col sm:items-center sm:justify-center p-0 sm:p-4 font-sans">
+
+    <!-- Hlavní kontejner: Na mobilu full-screen, na PC karta -->
+    <div id="app" class="bg-white w-full max-w-2xl min-h-screen sm:min-h-fit sm:rounded-xl sm:shadow-xl flex flex-col overflow-hidden">
+        
+        <!-- Hlavička (Header) -->
+        <div class="bg-white border-b border-gray-100 p-4 sm:p-6 sticky top-0 z-10">
+            <div class="flex justify-between items-start sm:items-center mb-2">
+                <h1 class="text-xl sm:text-2xl font-bold text-gray-800 leading-tight">Příprava na zkoušku PS1</h1>
+                <span id="mode-badge" class="hidden bg-orange-100 text-orange-700 text-xs font-bold px-2 py-1 rounded-full uppercase tracking-wide ml-2 whitespace-nowrap">Oprava</span>
+            </div>
+            
+            <!-- Progress bar a skóre -->
+            <div class="flex justify-between items-end text-sm mt-2">
+                <div class="flex flex-col">
+                    <span id="progress-text" class="text-gray-500 font-medium">Načítání...</span>
+                    <!-- Vizuální progress bar -->
+                    <div class="w-24 sm:w-32 h-1.5 bg-gray-100 rounded-full mt-1 overflow-hidden">
+                        <div id="progress-bar" class="h-full bg-blue-500 rounded-full transition-all duration-300" style="width: 0%"></div>
+                    </div>
+                </div>
+                <div class="flex items-center gap-1 bg-green-50 px-2 py-1 rounded-lg">
+                    <span class="text-green-600 font-bold text-base" id="score-live">0</span>
+                    <span class="text-green-600 text-xs">bodů</span>
+                </div>
+            </div>
+        </div>
+
+        <!-- Obsah (Scrollable) -->
+        <div id="quiz-container" class="flex-1 overflow-y-auto p-4 sm:p-8 pb-24 sm:pb-8">
+            <p id="question-text" class="text-lg sm:text-xl text-gray-800 font-medium mb-6 leading-relaxed"></p>
+            
+            <div id="options" class="space-y-3 sm:space-y-4">
+                <!-- Tlačítka se generují zde -->
+            </div>
+        </div>
+
+        <!-- Výsledková obrazovka (skrytá) -->
+        <div id="result-container" class="hidden flex-1 flex flex-col items-center justify-center p-8 text-center animate-fade-in">
+            <div class="mb-6 bg-blue-50 p-4 rounded-full">
+                <svg class="w-16 h-16 text-blue-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
+            </div>
+            <h2 class="text-3xl font-bold text-gray-800 mb-2">Test dokončen!</h2>
+            <p id="score-final" class="text-xl text-gray-600 mb-6"></p>
+            
+            <div id="wrong-container" class="mb-8 w-full">
+                <p id="wrong-count-msg" class="text-red-500 font-bold mb-4 bg-red-50 p-3 rounded-lg"></p>
+            </div>
+            
+            <div class="flex flex-col gap-3 w-full sm:w-2/3">
+                <button id="retry-btn" class="w-full bg-orange-500 active:bg-orange-600 text-white font-semibold py-3.5 px-6 rounded-xl shadow-sm transition-transform active:scale-95 hidden flex items-center justify-center gap-2">
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"></path></svg>
+                    Opravit chyby
+                </button>
+                <button onclick="restartFullTest()" class="w-full bg-blue-600 active:bg-blue-700 text-white font-semibold py-3.5 px-6 rounded-xl shadow-sm transition-transform active:scale-95 flex items-center justify-center gap-2">
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path></svg>
+                    Spustit celý test znovu
+                </button>
+            </div>
+        </div>
+
+        <!-- Sticky Footer pro tlačítko "Další" -->
+        <div id="footer-actions" class="p-4 bg-white border-t border-gray-100 sm:rounded-b-xl sticky bottom-0 z-20 hidden">
+            <button id="next-btn" class="w-full bg-blue-600 hover:bg-blue-700 active:bg-blue-800 text-white text-lg font-bold py-3.5 px-6 rounded-xl shadow-lg transition-all transform active:scale-[0.98] flex justify-center items-center gap-2">
+                Další otázka
+                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 7l5 5m0 0l-5 5m5-5H6"></path></svg>
+            </button>
+        </div>
+    </div>
+
+    <script>
+        // Kompletní databáze otázek
+        const allQuestions = [
+  {
+    "id": 1,
+    "otazka": "Stanovení úrovně hladiny podzemní vody je primárním předmětem:",
+    "moznosti": {
+      "A": "Inženýrsko-geologického a hydrogeologického průzkumu",
+      "B": "Projektové dokumentace pro stavební povolení",
+      "C": "Průkazu energetické náročnosti budovy",
+      "D": "Kolaudačního souhlasu stavby"
+    },
+    "spravne": "A"
+  },
+  {
+    "id": 2,
+    "otazka": "Lze u železobetonových prefabrikovaných překladů zaměnit spodní a horní líc (otočit je)?",
+    "moznosti": {
+      "A": "Ano, u čtvercových profilů je to možné, únosnost je stejná.",
+      "B": "Ne, nosná výztuž je umístěna pouze u spodního taženého líce.",
+      "C": "Ano, beton má vysokou pevnost v tlaku, orientace nehraje roli.",
+      "D": "Záleží pouze na délce překladu, u krátkých do 1 metru to lze."
+    },
+    "spravne": "B"
+  },
+  {
+    "id": 3,
+    "otazka": "Dokumentace skutečného provedení stavby (DSPS) slouží k:",
+    "moznosti": {
+      "A": "Získání stavebního povolení pro nově navrhované stavby.",
+      "B": "Přípravě demolice objektu a recyklaci materiálu.",
+      "C": "Zachycení změn oproti původnímu projektu pro účely kolaudace.",
+      "D": "Výpočtu tepelných ztrát budovy pro dotační programy."
+    },
+    "spravne": "C"
+  },
+  {
+    "id": 4,
+    "otazka": "Při návrhu šířky ramene schodiště musíme počítat s prostorem pro zábradlí a madlo. Do minimální průchozí šířky může zasahovat:",
+    "moznosti": {
+      "A": "Zábradlí max. 50 mm a madlo max. 100 mm.",
+      "B": "Zábradlí max. 100 mm a madlo max. 50 mm.",
+      "C": "Žádná konstrukce, šířka musí být zcela volná.",
+      "D": "Jakákoliv konstrukce ve výšce nad 900 mm."
+    },
+    "spravne": "A"
+  },
+  {
+    "id": 5,
+    "otazka": "Jaká je přibližná maximální délka (rozpon), pro kterou lze efektivně použít předpjaté stropní panely Spiroll?",
+    "moznosti": {
+      "A": "Cca 8 metrů (běžné stropy).",
+      "B": "Až 16 metrů (případně i více).",
+      "C": "Maximálně 4 metry (překlady).",
+      "D": "Pouze nad otvory do 2 metrů."
+    },
+    "spravne": "B"
+  },
+  {
+    "id": 6,
+    "otazka": "Výskyt plísně v oblasti nadpraží okna (v interiéru) nejčastěji indikuje:",
+    "moznosti": {
+      "A": "Nadměrné větrání v zimním období.",
+      "B": "Pokles povrchové teploty pod rosný bod.",
+      "C": "Použití nevhodné interiérové malby.",
+      "D": "Příliš vysokou teplotu v místnosti."
+    },
+    "spravne": "B"
+  },
+  {
+    "id": 7,
+    "otazka": "Pokud potřebujeme u polyfunkčního objektu zcela volný prostor pro variabilní řešení fasády, je nejvhodnější stěnový systém:",
+    "moznosti": {
+      "A": "Podélný",
+      "B": "Příčný",
+      "C": "Obousměrný",
+      "D": "Krabicový"
+    },
+    "spravne": "B"
+  },
+  {
+    "id": 8,
+    "otazka": "Do pasivní požární ochrany stavby řadíme:",
+    "moznosti": {
+      "A": "Elektrickou požární signalizaci a sprinklery.",
+      "B": "Vhodné stavební hmoty a dispoziční členění.",
+      "C": "Vybavení objektu hasicími přístroji.",
+      "D": "Zajištění příjezdových cest pro hasiče."
+    },
+    "spravne": "B"
+  },
+  {
+    "id": 9,
+    "otazka": "Ocelová konstrukce Eiffelovy věže (z roku 1889) je spojována technologií:",
+    "moznosti": {
+      "A": "Svařování",
+      "B": "Nýtování",
+      "C": "Lepení",
+      "D": "Šroubování"
+    },
+    "spravne": "B"
+  },
+  {
+    "id": 10,
+    "otazka": "Podle Lehmanova vzorce (2h + b = 630 mm), jaká je optimální výška stupně (h) při šířce stupně (b) 300 mm?",
+    "moznosti": {
+      "A": "150 mm",
+      "B": "165 mm",
+      "C": "180 mm",
+      "D": "140 mm"
+    },
+    "spravne": "B"
+  },
+  {
+    "id": 11,
+    "otazka": "Co je hlavní výhodou vápenopískového zdiva (VPC) oproti běžným keramickým tvárnicím?",
+    "moznosti": {
+      "A": "Nízká hmotnost a snadná manipulace na stavbě.",
+      "B": "Vysoká pevnost a akustická neprůzvučnost.",
+      "C": "Vynikající tepelně-izolační vlastnosti bez zateplení.",
+      "D": "Snadné sekání drážek pro instalace."
+    },
+    "spravne": "B"
+  },
+  {
+    "id": 12,
+    "otazka": "Dokumentace pro provádění stavby (DPS) se u stavebních výkresů zpravidla zpracovává v měřítku:",
+    "moznosti": {
+      "A": "1:100",
+      "B": "1:50",
+      "C": "1:200",
+      "D": "1:500"
+    },
+    "spravne": "B"
+  },
+  {
+    "id": 13,
+    "otazka": "Křížová klenba vzniká jako průnik:",
+    "moznosti": {
+      "A": "Dvou valených kleneb na sebe kolmých.",
+      "B": "Čtyř valených kleneb s různým poloměrem.",
+      "C": "Kupole a klasické valené klenby.",
+      "D": "Dřevěného trámového stropu a klenby."
+    },
+    "spravne": "A"
+  },
+  {
+    "id": 14,
+    "otazka": "Termín 'ztracené bednění' označuje:",
+    "moznosti": {
+      "A": "Bednění, které se po betonáži demontuje a odváží.",
+      "B": "Bednění, které zůstává trvalou součástí konstrukce.",
+      "C": "Dočasné bednění, které se při stavbě ztratilo.",
+      "D": "Bednění používané výhradně pro základové pasy."
+    },
+    "spravne": "B"
+  },
+  {
+    "id": 15,
+    "otazka": "K difúzi vodní páry stavební konstrukcí dochází přirozeně směrem:",
+    "moznosti": {
+      "A": "Z prostředí s vyšším částečným tlakem páry do nižšího.",
+      "B": "Z prostředí s nižším částečným tlakem páry do vyššího.",
+      "C": "Vždy směrem z exteriéru do interiéru.",
+      "D": "K difúzi u moderních materiálů nedochází."
+    },
+    "spravne": "A"
+  },
+  {
+    "id": 16,
+    "otazka": "U železobetonové desky, která tvoří konzolu (např. balkon), musí být hlavní nosná výztuž umístěna:",
+    "moznosti": {
+      "A": "Při spodním okraji desky (v tažené zóně).",
+      "B": "Při horním okraji desky (v tažené zóně).",
+      "C": "Uprostřed průřezu desky (v neutrální ose).",
+      "D": "Na poloze nezáleží, rozhoduje množství betonu."
+    },
+    "spravne": "B"
+  },
+  {
+    "id": 17,
+    "otazka": "Jaký je maximální doporučený sklon hlavního schodiště v bytových domech bez výtahu?",
+    "moznosti": {
+      "A": "33°",
+      "B": "45°",
+      "C": "25°",
+      "D": "60°"
+    },
+    "spravne": "A"
+  },
+  {
+    "id": 18,
+    "otazka": "Součinitel tepelné vodivosti (lambda) stavebního materiálu s rostoucí vlhkostí:",
+    "moznosti": {
+      "A": "Klesá (materiál lépe izoluje).",
+      "B": "Zůstává konstantní.",
+      "C": "Vzrůstá (materiál hůře izoluje).",
+      "D": "Mění se pouze u dřeva, u zdiva ne."
+    },
+    "spravne": "C"
+  },
+  {
+    "id": 19,
+    "otazka": "Systém ETICS označuje:",
+    "moznosti": {
+      "A": "Vnější kontaktní zateplovací systém.",
+      "B": "Elektronický systém zabezpečení stavby.",
+      "C": "Systém pro vnitřní zateplení budov.",
+      "D": "Normu pro navrhování betonových konstrukcí."
+    },
+    "spravne": "A"
+  },
+  {
+    "id": 20,
+    "otazka": "Mezi proměnná (užitná) zatížení stropní konstrukce nepatří:",
+    "moznosti": {
+      "A": "Lidé, nábytek a vybavení.",
+      "B": "Vlastní tíha nosné konstrukce a podlah.",
+      "C": "Sníh (u střešních konstrukcí).",
+      "D": "Zatížení větrem."
+    },
+    "spravne": "B"
+  },
+  {
+    "id": 21,
+    "otazka": "Jaká je hlavní nevýhoda prefabrikovaných schodišťových ramen?",
+    "moznosti": {
+      "A": "Nutnost dalších povrchových úprav na stavbě.",
+      "B": "Omezení velikosti a hmotnosti pro dopravu.",
+      "C": "Nemožnost vyrobit točité rameno.",
+      "D": "Nižší kvalita betonu oproti monolitickému."
+    },
+    "spravne": "B"
+  },
+  {
+    "id": 22,
+    "otazka": "Pro osazení okna v obvodové stěně platí, že stavební otvor je oproti oknu:",
+    "moznosti": {
+      "A": "Stejně velký (na těsno).",
+      "B": "Větší (pro rám a těsnění).",
+      "C": "Menší (okno se osazuje do drážky).",
+      "D": "Rozměr otvoru se předem neurčuje."
+    },
+    "spravne": "B"
+  },
+  {
+    "id": 23,
+    "otazka": "Co je to 'prolamovaný nosník'?",
+    "moznosti": {
+      "A": "Nosník poškozený nadměrným zatížením.",
+      "B": "Ocelový nosník s navýšenou výškou a otvory ve stojině.",
+      "C": "Dřevěný nosník s vyvrtanými otvory pro instalace.",
+      "D": "Betonový nosník s trhlinami v tažené oblasti."
+    },
+    "spravne": "B"
+  },
+  {
+    "id": 24,
+    "otazka": "Jaká je funkce výztužné mřížky (perlinky) v omítkovém souvrství?",
+    "moznosti": {
+      "A": "Pouze dekorativní funkce pro hladký povrch.",
+      "B": "Zvyšuje tepelný odpor stěny.",
+      "C": "Eliminuje vznik trhlin a vyztužuje podklad.",
+      "D": "Slouží jako primární hydroizolace."
+    },
+    "spravne": "C"
+  },
+  {
+    "id": 25,
+    "otazka": "Které tvrzení o stěně z plných cihel (450 mm) vs. Porotherm 44 je pravdivé?",
+    "moznosti": {
+      "A": "Plná cihla má lepší tepelně izolační vlastnosti.",
+      "B": "Plná cihla má výrazně horší tepelně izolační vlastnosti.",
+      "C": "Obě stěny izolují prakticky stejně.",
+      "D": "Plná cihla se nesmí používat ani na nosné pilíře."
+    },
+    "spravne": "B"
+  },
+  {
+    "id": 26,
+    "otazka": "Kleinův strop je tvořen:",
+    "moznosti": {
+      "A": "Ocelovými nosníky a cihelnou klenbou.",
+      "B": "Dřevěnými trámy a záklopem.",
+      "C": "Železobetonovými panely.",
+      "D": "Trapézovým plechem a betonem."
+    },
+    "spravne": "A"
+  },
+  {
+    "id": 27,
+    "otazka": "Co znamená pojem 'filigránová' stropní konstrukce?",
+    "moznosti": {
+      "A": "Plně prefabrikovaná konstrukce bez betonáže.",
+      "B": "Poloprefabrikovaná deska s nadbetonávkou.",
+      "C": "Dřevěný strop s ozdobnými prvky.",
+      "D": "Historický klenbový strop."
+    },
+    "spravne": "B"
+  },
+  {
+    "id": 28,
+    "otazka": "Při návrhu schodiště musíme zajistit, aby se po něm dal pronést předmět o rozměrech:",
+    "moznosti": {
+      "A": "1800 x 1800 x 600 mm",
+      "B": "2500 x 2000 x 1000 mm",
+      "C": "Minimálně invalidní vozík.",
+      "D": "Při existenci výtahu tento požadavek neplatí."
+    },
+    "spravne": "A"
+  },
+  {
+    "id": 29,
+    "otazka": "Jaký materiál je nejvhodnější pro 'tichou' konstrukci stěny (vzduchová neprůzvučnost)?",
+    "moznosti": {
+      "A": "Materiál s nízkou objemovou hmotností (pórobeton).",
+      "B": "Materiál s vysokou objemovou hmotností (akustická cihla).",
+      "C": "Polystyrenové tvárnice.",
+      "D": "Sádrokarton bez izolace."
+    },
+    "spravne": "B"
+  },
+  {
+    "id": 30,
+    "otazka": "Průkaz energetické náročnosti budovy (PENB) je povinný:",
+    "moznosti": {
+      "A": "Pouze pro rodinné domy s dotací.",
+      "B": "Pro všechny nové budovy a větší rekonstrukce.",
+      "C": "Je zcela dobrovolný.",
+      "D": "Pouze pro budovy státní správy."
+    },
+    "spravne": "B"
+  },
+  {
+    "id": 31,
+    "otazka": "Joseph Monier, původním povoláním zahradník, přispěl k objevu:",
+    "moznosti": {
+      "A": "Výroby velkoformátového skla.",
+      "B": "Vyztužování betonu (železobetonu).",
+      "C": "Samonosných cihelných bloků.",
+      "D": "Asfaltových hydroizolací."
+    },
+    "spravne": "B"
+  },
+  {
+    "id": 32,
+    "otazka": "Jaká je ideální orientace dilatačních spár u dlouhých železobetonových konstrukcí?",
+    "moznosti": {
+      "A": "Dilatace nejsou u železobetonu potřeba.",
+      "B": "Dilatace je nutná kvůli objemovým změnám.",
+      "C": "Dilatují se pouze základy, vrchní stavba ne.",
+      "D": "Používají se pouze u ocelových konstrukcí."
+    },
+    "spravne": "B"
+  },
+  {
+    "id": 33,
+    "otazka": "Co je to 'bačkora' v tesařských konstrukcích?",
+    "moznosti": {
+      "A": "Ozdobný prvek na konci trámu.",
+      "B": "Patka sloupu ležící na podlaze/prahu.",
+      "C": "Spojovací prostředek krovu.",
+      "D": "Druh střešní krytiny."
+    },
+    "spravne": "B"
+  },
+  {
+    "id": 34,
+    "otazka": "Co je to 'sedlo' v tesařských konstrukcích?",
+    "moznosti": {
+      "A": "Místo pro usazení hřebenáče.",
+      "B": "Zhlaví sloupu rozšířené a podepřené vzpěrami.",
+      "C": "Prostor mezi krokvemi.",
+      "D": "Nástroj pro opracování dřeva."
+    },
+    "spravne": "B"
+  },
+  {
+    "id": 35,
+    "otazka": "Který materiál má nejlepší fázový posun teplotního kmitu (ochrana proti přehřívání)?",
+    "moznosti": {
+      "A": "Pěnový polystyren (EPS).",
+      "B": "Minerální vata.",
+      "C": "Dřevovláknitá izolace nebo celulóza.",
+      "D": "Měkká PUR pěna."
+    },
+    "spravne": "C"
+  },
+  {
+    "id": 36,
+    "otazka": "Lze provádět prostupy (díry) v panelech Spiroll?",
+    "moznosti": {
+      "A": "Ano, lze je dělat libovolně velké kdekoliv.",
+      "B": "Ne, panel by praskl.",
+      "C": "Ano, ale pouze v oblasti dutin a dle statika.",
+      "D": "Ano, ale pouze v místě předpínacích lan."
+    },
+    "spravne": "C"
+  },
+  {
+    "id": 37,
+    "otazka": "Co je 'stavební deník'?",
+    "moznosti": {
+      "A": "Osobní zápisník stavbyvedoucího.",
+      "B": "Zákonem daný dokument o průběhu prací.",
+      "C": "Výkaz výměr pro fakturaci.",
+      "D": "Seznam docházky zaměstnanců."
+    },
+    "spravne": "B"
+  },
+  {
+    "id": 38,
+    "otazka": "U jednoramenného schodiště s výškou stupně 170 mm bude optimální šířka stupně:",
+    "moznosti": {
+      "A": "250 mm",
+      "B": "290 mm",
+      "C": "340 mm",
+      "D": "200 mm"
+    },
+    "spravne": "B"
+  },
+  {
+    "id": 39,
+    "otazka": "Jak je na tom stěna z monolitického betonu tepelně-izolačně oproti pórobetonu stejné tloušťky?",
+    "moznosti": {
+      "A": "Výrazně lépe.",
+      "B": "Výrazně hůře.",
+      "C": "Srovnatelně.",
+      "D": "Záleží pouze na množství výztuže."
+    },
+    "spravne": "B"
+  },
+  {
+    "id": 40,
+    "otazka": "Modulová koordinace ve stavebnictví slouží k:",
+    "moznosti": {
+      "A": "Sjednocení rozměrů a zjednodušení výstavby.",
+      "B": "Zvýšení ceny projektových prací.",
+      "C": "Omezení kreativity architekta.",
+      "D": "Výhradně k výpočtu statiky."
+    },
+    "spravne": "A"
+  },
+  {
+    "id": 41,
+    "otazka": "Mezi kompletační konstrukce patří:",
+    "moznosti": {
+      "A": "Základy a nosné stěny.",
+      "B": "Podlahy, výplně otvorů a obklady.",
+      "C": "Stropy a konstrukce krovu.",
+      "D": "Výkopy a zemní práce."
+    },
+    "spravne": "B"
+  },
+  {
+    "id": 42,
+    "otazka": "Co je to 'gabion'?",
+    "moznosti": {
+      "A": "Druh historické klenby.",
+      "B": "Drátokamenný koš pro opěrné zdi.",
+      "C": "Typ střešního okna.",
+      "D": "Betonová tvárnice pro ztracené bednění."
+    },
+    "spravne": "B"
+  },
+  {
+    "id": 43,
+    "otazka": "Kdy se provádí 'radonový průzkum'?",
+    "moznosti": {
+      "A": "Až po kolaudaci stavby.",
+      "B": "Před zahájením stavby.",
+      "C": "Pouze u staveb s podzemním parkovištěm.",
+      "D": "Neprovádí se, radon není nebezpečný."
+    },
+    "spravne": "B"
+  },
+  {
+    "id": 44,
+    "otazka": "Na termosnímku fasády v zimě znamenají červená/žlutá místa:",
+    "moznosti": {
+      "A": "Místa s lepším zateplením.",
+      "B": "Únik tepla tepelnými mosty.",
+      "C": "Místa, kde je fasáda vlhká.",
+      "D": "Chybu kalibrace přístroje."
+    },
+    "spravne": "B"
+  },
+  {
+    "id": 45,
+    "otazka": "U dřevostavby typu 'Balloon frame' probíhají sloupky:",
+    "moznosti": {
+      "A": "Vždy jen na výšku jednoho patra.",
+      "B": "Průběžně přes dvě i více podlaží.",
+      "C": "Pouze v rozích budovy.",
+      "D": "Nepoužívají se sloupky, ale panely."
+    },
+    "spravne": "B"
+  },
+  {
+    "id": 46,
+    "otazka": "Pro zbourání větší stavby (např. haly) je nutné zpracovat:",
+    "moznosti": {
+      "A": "Pouze fotodokumentaci.",
+      "B": "Dokumentaci bouracích prací a získat povolení.",
+      "C": "Stačí ústní dohoda se stavebním úřadem.",
+      "D": "Nic, pokud je pozemek v osobním vlastnictví."
+    },
+    "spravne": "B"
+  },
+  {
+    "id": 47,
+    "otazka": "Prostý nosník zatížený rovnoměrným spojitým zatížením má maximální ohybový moment:",
+    "moznosti": {
+      "A": "V místě podpor.",
+      "B": "Uprostřed rozpětí.",
+      "C": "V 1/4 rozpětí.",
+      "D": "Ohybový moment je nulový."
+    },
+    "spravne": "B"
+  },
+  {
+    "id": 48,
+    "otazka": "Proč se impregnuje zhlaví dřevěných trámů ukládaných do zdiva?",
+    "moznosti": {
+      "A": "Z estetických důvodů.",
+      "B": "Ochrana proti hnilobě a škůdcům.",
+      "C": "Pro lepší spojení s maltou.",
+      "D": "Zvyšuje to požární odolnost."
+    },
+    "spravne": "B"
+  },
+  {
+    "id": 49,
+    "otazka": "V jakém případě použijeme 'dokumentaci širších vztahů'?",
+    "moznosti": {
+      "A": "Pro detailní návrh interiéru.",
+      "B": "Pro posouzení zasazení stavby do území.",
+      "C": "Pro statický výpočet.",
+      "D": "Pro výběr dodavatele oken."
+    },
+    "spravne": "B"
+  },
+  {
+    "id": 50,
+    "otazka": "Co je to 'rekuperace'?",
+    "moznosti": {
+      "A": "Zpětné získávání tepla z odpadního vzduchu.",
+      "B": "Druh vytápění podlahou.",
+      "C": "Recyklace stavební suti.",
+      "D": "Obnova historické fasády."
+    },
+    "spravne": "A"
+  },
+  {
+    "id": 51,
+    "otazka": "Pokud je v zadání 'schodiště pilířové', znamená to:",
+    "moznosti": {
+      "A": "Schodiště visuté bez podpor.",
+      "B": "Schodiště s rameny kolem pilířů v zrcadle.",
+      "C": "Schodiště podepřené pouze obvodovými zdmi.",
+      "D": "Pojízdné schody (eskalátor)."
+    },
+    "spravne": "B"
+  },
+  {
+    "id": 52,
+    "otazka": "Jaká je funkce 'záklopu' u dřevěného stropu?",
+    "moznosti": {
+      "A": "Kryje strop ze spodní strany (podhled).",
+      "B": "Tvoří horní pochozí vrstvu na trámech.",
+      "C": "Je to ozdobná lišta.",
+      "D": "Izoluje proti vodě."
+    },
+    "spravne": "B"
+  },
+  {
+    "id": 53,
+    "otazka": "Stěnový systém 'příčný' (nosné stěny kolmé na fasádu) umožňuje:",
+    "moznosti": {
+      "A": "Libovolné posouvání nosných stěn.",
+      "B": "Volné řešení fasády (velká okna).",
+      "C": "Použití velmi tenkých stropních desek.",
+      "D": "Stavbu bez základů."
+    },
+    "spravne": "B"
+  },
+  {
+    "id": 54,
+    "otazka": "Zatížení sněhem se stanovuje na základě:",
+    "moznosti": {
+      "A": "Sněhové mapy a příslušné sněhové oblasti.",
+      "B": "Odhadu stavbyvedoucího.",
+      "C": "Jednotné hodnoty pro celou Evropu.",
+      "D": "Množství sněhu v loňském roce."
+    },
+    "spravne": "A"
+  },
+  {
+    "id": 55,
+    "otazka": "Pokud stavíme v proluce v centru města, jakou konstrukci zvolíme pro maximální využití prostoru?",
+    "moznosti": {
+      "A": "Srubovou konstrukci.",
+      "B": "Železobetonový monolit (subtilní stěny).",
+      "C": "Zdivo z nepálených cihel.",
+      "D": "Kontejnerovou stavbu."
+    },
+    "spravne": "B"
+  },
+  {
+    "id": 56,
+    "otazka": "Jaké měřítko se obvykle používá pro 'Situaci širších vztahů'?",
+    "moznosti": {
+      "A": "1:50",
+      "B": "1:1000 nebo 1:5000",
+      "C": "1:10",
+      "D": "1:100"
+    },
+    "spravne": "B"
+  },
+  {
+    "id": 57,
+    "otazka": "Proč se u železobetonových desek dává výztuž u podpor (nad zdí) k hornímu okraji?",
+    "moznosti": {
+      "A": "Je to chyba, má být dole.",
+      "B": "Kvůli zápornému ohybovému momentu.",
+      "C": "Aby se po ní dalo chodit při betonáži.",
+      "D": "Z důvodu požární ochrany."
+    },
+    "spravne": "B"
+  },
+  {
+    "id": 58,
+    "otazka": "Co je to 'segmentová klenba'?",
+    "moznosti": {
+      "A": "Klenba s obloukem menším než půlkruh.",
+      "B": "Klenba složená z prefabrikovaných dílců.",
+      "C": "Klenba ve tvaru plného půlkruhu.",
+      "D": "Gotická lomená klenba."
+    },
+    "spravne": "A"
+  },
+  {
+    "id": 59,
+    "otazka": "Pokud máme délku prostoru pro rameno 2400 mm, kolik stupňů (šířka 300 mm) se tam vejde?",
+    "moznosti": {
+      "A": "8 stupňů",
+      "B": "10 stupňů",
+      "C": "6 stupňů",
+      "D": "12 stupňů"
+    },
+    "spravne": "A"
+  },
+  {
+    "id": 60,
+    "otazka": "Výrobní rozměr okna 1180 mm se obvykle osazuje do stavebního otvoru o šířce:",
+    "moznosti": {
+      "A": "1180 mm (na těsno).",
+      "B": "1200 - 1210 mm (prostor pro vyrovnání).",
+      "C": "1500 mm (prostor pro zateplení).",
+      "D": "1000 mm (okno se zazdí)."
+    },
+    "spravne": "B"
+  }
+];
+
+        // Stavové proměnné
+        let activeQuestions = [];
+        let wrongAnswers = [];
+        let currentQuestionIndex = 0;
+        let score = 0;
+        let isRetryMode = false;
+
+        // Elementy
+        const quizContainer = document.getElementById('quiz-container');
+        const resultContainer = document.getElementById('result-container');
+        const questionText = document.getElementById('question-text');
+        const optionsDiv = document.getElementById('options');
+        const nextBtn = document.getElementById('next-btn');
+        const retryBtn = document.getElementById('retry-btn');
+        const scoreLive = document.getElementById('score-live');
+        const progressText = document.getElementById('progress-text');
+        const progressBar = document.getElementById('progress-bar');
+        const modeBadge = document.getElementById('mode-badge');
+        const footerActions = document.getElementById('footer-actions');
+
+        function initTest() {
+            activeQuestions = [...allQuestions];
+            activeQuestions = shuffle(activeQuestions);
+            wrongAnswers = [];
+            currentQuestionIndex = 0;
+            score = 0;
+            isRetryMode = false;
+            
+            updateModeUI();
+            quizContainer.classList.remove('hidden');
+            resultContainer.classList.add('hidden');
+            footerActions.classList.add('hidden');
+            loadQuestion();
+        }
+
+        function restartFullTest() {
+            initTest();
+        }
+
+        function startRetry() {
+            activeQuestions = [...wrongAnswers];
+            wrongAnswers = [];
+            currentQuestionIndex = 0;
+            score = 0;
+            isRetryMode = true;
+
+            updateModeUI();
+            quizContainer.classList.remove('hidden');
+            resultContainer.classList.add('hidden');
+            footerActions.classList.add('hidden');
+            loadQuestion();
+        }
+
+        function loadQuestion() {
+            const q = activeQuestions[currentQuestionIndex];
+            
+            // Progress Update
+            const currentNum = currentQuestionIndex + 1;
+            const totalNum = activeQuestions.length;
+            const percent = (currentNum / totalNum) * 100;
+            
+            progressText.innerText = `Otázka ${currentNum} z ${totalNum}`;
+            progressBar.style.width = `${percent}%`;
+            scoreLive.innerText = score;
+            
+            // Question Text
+            questionText.innerText = q.otazka;
+            
+            // Options
+            optionsDiv.innerHTML = '';
+            footerActions.classList.add('hidden'); // Skrýt "Další" při nové otázce
+
+            // Zamíchání odpovědí (aby A nebylo vždy první, pokud chceme, ale tady jsou klíče A,B,C,D fixní)
+            // Zde zachováváme pořadí A, B, C, D jak je v JSONu, protože správná odpověď je vázána na klíč.
+            Object.entries(q.moznosti).forEach(([key, value]) => {
+                const btn = document.createElement('button');
+                btn.innerHTML = `<span class="font-bold mr-2 text-gray-400">${key})</span> ${value}`;
+                btn.className = 'option-btn w-full text-left p-4 bg-gray-50 border-2 border-gray-100 rounded-xl transition-all duration-200 text-gray-700 font-medium text-base sm:text-lg mb-2 sm:mb-0 hover:bg-gray-100';
+                btn.onclick = () => selectOption(key, btn);
+                optionsDiv.appendChild(btn);
+            });
+            
+            // Scroll to top of questions container
+            document.getElementById('quiz-container').scrollTop = 0;
+        }
+
+        function selectOption(key, btn) {
+            const q = activeQuestions[currentQuestionIndex];
+            const buttons = document.querySelectorAll('.option-btn');
+            
+            buttons.forEach(b => {
+                b.disabled = true;
+                b.classList.add('opacity-60'); // Ztlumit ostatní
+                b.classList.remove('hover:bg-gray-100', 'bg-gray-50'); // Odstranit hover efekty
+            });
+            btn.classList.remove('opacity-60'); // Vybrané tlačítko neztlumovat
+
+            const isCorrect = (key === q.spravne);
+
+            if (isCorrect) {
+                btn.classList.remove('border-gray-100');
+                btn.classList.add('correct', 'bg-green-500', 'text-white', 'border-green-600', 'shadow-md');
+                // Přebarvení písmena
+                btn.innerHTML = btn.innerHTML.replace('text-gray-400', 'text-green-100');
+                score++;
+            } else {
+                btn.classList.remove('border-gray-100');
+                btn.classList.add('wrong', 'bg-red-500', 'text-white', 'border-red-600', 'shadow-md');
+                btn.innerHTML = btn.innerHTML.replace('text-gray-400', 'text-red-100');
+                
+                // Přidat do chyb
+                if (!wrongAnswers.some(wq => wq.id === q.id)) {
+                    wrongAnswers.push(q);
+                }
+
+                // Ukázat správnou odpověď
+                buttons.forEach(b => {
+                    // Musíme najít text, který odpovídá správné možnosti
+                    // Hledáme podle textu, protože 'key' nemáme v atributu
+                    // Zjednodušení: Projdeme možnosti znovu podle JSONu
+                    Object.entries(q.moznosti).forEach(([k, val]) => {
+                        if (k === q.spravne && b.innerText.includes(val)) {
+                            b.classList.remove('border-gray-100', 'opacity-60', 'bg-gray-50');
+                            b.classList.add('correct', 'bg-green-500', 'text-white', 'border-green-600');
+                            b.innerHTML = b.innerHTML.replace('text-gray-400', 'text-green-100');
+                        }
+                    });
+                });
+            }
+            
+            scoreLive.innerText = score;
+            
+            // Zobrazit patičku s tlačítkem Další
+            footerActions.classList.remove('hidden');
+            // Scrollnout dolů, aby bylo tlačítko vidět (pokud není sticky)
+            // U sticky patičky to není nutné, ale pro jistotu:
+            footerActions.scrollIntoView({ behavior: 'smooth', block: 'end' });
+        }
+
+        nextBtn.onclick = () => {
+            currentQuestionIndex++;
+            if (currentQuestionIndex < activeQuestions.length) {
+                loadQuestion();
+            } else {
+                showResults();
+            }
+        };
+
+        function showResults() {
+            quizContainer.classList.add('hidden');
+            footerActions.classList.add('hidden');
+            resultContainer.classList.remove('hidden');
+            
+            const percentage = Math.round((score / activeQuestions.length) * 100);
+            document.getElementById('score-final').innerHTML = `Získal jsi <span class="font-bold text-gray-900">${score}</span> z <span class="font-bold text-gray-900">${activeQuestions.length}</span> bodů (<span class="${percentage >= 70 ? 'text-green-600' : 'text-orange-500'} font-bold">${percentage}%</span>).`;
+            
+            const wrongMsg = document.getElementById('wrong-count-msg');
+            
+            if (wrongAnswers.length > 0) {
+                wrongMsg.innerText = `Máš ${wrongAnswers.length} chyb(y).`;
+                wrongMsg.className = "text-red-600 font-bold mb-4 bg-red-50 p-4 rounded-xl border border-red-100 w-full";
+                retryBtn.classList.remove('hidden');
+                retryBtn.onclick = startRetry;
+            } else {
+                wrongMsg.innerText = "Gratulujeme! Zvládl jsi to bez jediné chyby.";
+                wrongMsg.className = "text-green-600 font-bold mb-4 bg-green-50 p-4 rounded-xl border border-green-100 w-full";
+                retryBtn.classList.add('hidden');
+            }
+        }
+
+        function updateModeUI() {
+            if (isRetryMode) {
+                modeBadge.classList.remove('hidden');
+            } else {
+                modeBadge.classList.add('hidden');
+            }
+        }
+
+        function shuffle(array) {
+            let currentIndex = array.length,  randomIndex;
+            while (currentIndex != 0) {
+                randomIndex = Math.floor(Math.random() * currentIndex);
+                currentIndex--;
+                [array[currentIndex], array[randomIndex]] = [
+                array[randomIndex], array[currentIndex]];
+            }
+            return array;
+        }
+
+        initTest();
+    </script>
+</body>
+</html>
